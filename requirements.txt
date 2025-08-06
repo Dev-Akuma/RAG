@@ -1,7 +1,7 @@
 fastapi[standard]==0.112.0
 uvicorn[standard]==0.22.0
 python-multipart
-spacy==3.6.1
+spacy
 PyMuPDF
 python-docx
 extract-msg
