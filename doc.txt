@@ -1,0 +1,8 @@
+    Project task is to create a RAG retrieval backend and provide the webhook.
+
+    use flow : the input is either pdf, docx, mail or msg and is then parsed using the document_parser.py
+    after this the context_chunker.py creates chunks of the parsed document
+    this chunk is then fed to the remote vector embedding model which then makes vector embeddings
+    and we also use pinecone too.
+
+    lastly I'd want to integrate gemini model to return with a structured and smarter json response based on the query of the user about the document.
