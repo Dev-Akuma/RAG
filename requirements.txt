@@ -20,10 +20,10 @@ numpy==1.26.4
 # FAISS for vector search
 faiss-cpu==1.7.4
 
-# Google Gemini API (official client)
-google-generativeai==0.11.0
+# Google Gemini API
+google-generativeai
 
-# LangChain and embeddings (remote)
+# LangChain and remote embeddings
+langchain==0.0.1
 langchain-community>=0.0.24
-langchain>=0.1.17
-huggingface-hub>=0.20.3
+huggingface-hub==0.20.3
