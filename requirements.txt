@@ -21,7 +21,7 @@ numpy==1.26.4
 faiss-cpu==1.7.4
 
 # Google Gemini API
-google-generativeai
+google-genai
 
 # LangChain and remote embeddings
 langchain==0.0.1
