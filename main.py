@@ -2,16 +2,16 @@ import os
 from io import BytesIO
 from typing import List
 
-import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+from google import genai  # Official Gemini client
 
 from app.document_parser import extract_text_from_upload
 from app.context_chunker import chunk_by_sentences
 from app.faiss_index import FaissIndex
 
-# For remote Hugging Face embedding (LangChain)
 from langchain.embeddings import HuggingFaceEmbeddings
 
 load_dotenv()
@@ -31,16 +31,12 @@ embedder = None
 vector_index = None
 
 # Config from env
-HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-GEMINI_API_URL = os.getenv("GEMINI_API_URL")  # e.g. https://api.generativeai.googleapis.com/v1beta2/models/gemini-2.5-flash-lite:generateContent
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
-if not HUGGINGFACEHUB_API_TOKEN:
-    raise RuntimeError("HUGGINGFACEHUB_API_TOKEN not set in env variables")
-if not GEMINI_API_URL:
-    raise RuntimeError("GEMINI_API_URL not set in env variables")
 if not GOOGLE_API_KEY:
     raise RuntimeError("GOOGLE_API_KEY not set in env variables")
+
+# Initialize Gemini client globally
+genai_client = genai.Client(api_key=GOOGLE_API_KEY)
 
 def get_embedder():
     global embedder
@@ -48,7 +44,6 @@ def get_embedder():
         print("🌐 Initializing remote Hugging Face embedder via LangChain...")
         embedder = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
-            huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
         )
     return embedder
 
@@ -60,24 +55,15 @@ def get_vector_index():
     return vector_index
 
 async def call_gemini_api(prompt: str) -> str:
-    headers = {
-        "Authorization": f"Bearer {GOOGLE_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    json_payload = {
-        "prompt": prompt,
-        "maxTokens": 256,
-    }
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(GEMINI_API_URL, headers=headers, json=json_payload, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            # Adjust depending on actual response structure
-            return data.get("text") or data.get("result") or ""
-        except Exception as e:
-            print(f"Error calling Gemini API: {e}")
-            return "Sorry, I couldn't generate a response at this time."
+    try:
+        response = genai_client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+        )
+        return response.text
+    except Exception as e:
+        print(f"Error calling Gemini API: {e}")
+        return "Sorry, I couldn't generate a response at this time."
 
 @app.post("/upload_document")
 async def upload_document(file: UploadFile = File(...)):

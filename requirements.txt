@@ -20,5 +20,9 @@ faiss-cpu==1.7.4
 google-generativeai==0.11.0
 langchain==0.0.1
 huggingface_hub==0.0.1
+pip install -U langchain-community
+pip install google-genai
+
+
 
 
