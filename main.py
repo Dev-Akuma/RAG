@@ -1,24 +1,23 @@
 import os
 from io import BytesIO
 from typing import List
+import asyncio # New import
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from google import genai  # Official Gemini client
-
+# Your existing imports
+from google import genai
 from app.document_parser import extract_text_from_upload
 from app.context_chunker import chunk_by_sentences
 from app.faiss_index import FaissIndex
-
 from langchain.embeddings import HuggingFaceEmbeddings
 
 load_dotenv()
 
 app = FastAPI()
 
-# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,35 +25,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Globals
+# Globals - they are initialized once at startup
 embedder = None
 vector_index = None
+genai_client = None # Also initialize this here
 
 # Config from env
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-if not GOOGLE_API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY not set in env variables")
 
-# Initialize Gemini client globally
-genai_client = genai.Client(api_key=GOOGLE_API_KEY)
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize all heavy, blocking dependencies at startup.
+    This runs on a separate thread pool and won't block the event loop.
+    """
+    global embedder, vector_index, genai_client
 
-def get_embedder():
-    global embedder
-    if embedder is None:
-        print("🌐 Initializing remote Hugging Face embedder via LangChain...")
-        embedder = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-        )
-    return embedder
+    if not GOOGLE_API_KEY:
+        raise RuntimeError("GOOGLE_API_KEY not set in env variables")
 
-def get_vector_index():
-    global vector_index
-    if vector_index is None:
-        print("📡 Initializing FAISS Index...")
-        vector_index = FaissIndex()
-    return vector_index
+    # Initialize Gemini client
+    print("🚀 Initializing Gemini client...")
+    genai_client = genai.Client(api_key=GOOGLE_API_KEY)
+
+    # Initialize Hugging Face embedder using asyncio.to_thread
+    # This ensures the blocking model download doesn't freeze the server.
+    print("🌐 Initializing remote Hugging Face embedder via LangChain...")
+    embedder = await asyncio.to_thread(
+        HuggingFaceEmbeddings,
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+    )
+    
+    # Initialize FAISS Index (this should be fast)
+    print("📡 Initializing FAISS Index...")
+    vector_index = FaissIndex()
+
+    print("✅ All dependencies initialized successfully.")
+
+# Removed the get_embedder and get_vector_index functions
+# We now use the global variables directly
 
 async def call_gemini_api(prompt: str) -> str:
+    # ... (no change here)
+    if not genai_client:
+        # In case a request comes in before startup is complete
+        raise HTTPException(status_code=503, detail="Service not ready. Please try again in a moment.")
     try:
         response = genai_client.models.generate_content(
             model="gemini-2.5-flash-lite",
@@ -71,25 +86,23 @@ async def upload_document(file: UploadFile = File(...)):
     Upload a document, extract text, chunk it, generate embeddings (remote),
     and store them in FAISS.
     """
+    # Now just use the global variables directly
+    if not embedder or not vector_index:
+        raise HTTPException(status_code=503, detail="Service not ready. Please try again in a moment.")
+
     try:
         content = await file.read()
         file_stream = BytesIO(content)
 
-        # 1. Extract text
         raw_text = extract_text_from_upload(file_stream, file.filename)
-
-        # 2. Chunk text
         chunks = chunk_by_sentences(raw_text, max_tokens=150)
         if not chunks:
             raise HTTPException(status_code=400, detail="No text found to chunk.")
 
-        # 3. Generate embeddings (remote)
-        embedder_instance = get_embedder()
-        embeddings = embedder_instance.embed_documents(chunks)  # returns List[List[float]]
-
-        # 4. Store in FAISS
-        vector_db = get_vector_index()
-        vector_db.add(embeddings, chunks)
+        # The embed_documents call is still synchronous, but it's okay because
+        # the model is already loaded and it runs inside an endpoint task.
+        embeddings = embedder.embed_documents(chunks)
+        vector_index.add(embeddings, chunks)
 
         return {
             "message": f"✅ {file.filename} processed and stored with {len(chunks)} chunks.",
@@ -105,36 +118,30 @@ async def query_document(query: str):
     """
     Query documents using FAISS-based retrieval and get Gemini LLM response.
     """
+    # Now just use the global variables directly
+    if not embedder or not vector_index:
+        raise HTTPException(status_code=503, detail="Service not ready. Please try again in a moment.")
+    
     try:
         if not query.strip():
             raise HTTPException(status_code=400, detail="Query string is empty.")
 
-        # 1. Embed user query remotely
-        embedder_instance = get_embedder()
-        query_embedding = embedder_instance.embed_query(query)  # returns List[float]
+        query_embedding = embedder.embed_query(query)
+        top_matches = vector_index.query(query_embedding, top_k=5)
 
-        # 2. Retrieve relevant chunks from FAISS
-        vector_db = get_vector_index()
-        top_matches = vector_db.query(query_embedding, top_k=5)  # should return list of dicts with 'text'
-
-        # 3. Format context from top chunks
         if not top_matches:
             context = "No relevant context found."
         else:
             context = "\n\n".join([match["text"] for match in top_matches])
 
-        # 4. Build Gemini prompt
         prompt = f"""
 You are an intelligent assistant. Use the following context to answer the user's query.
-
 Context:
 {context}
-
 User query:
 {query}
 """
 
-        # 5. Call Gemini API asynchronously
         response_text = await call_gemini_api(prompt)
 
         return {
