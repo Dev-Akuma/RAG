@@ -23,7 +23,7 @@ faiss-cpu==1.7.4
 # Google Gemini API (official client)
 google-generativeai==0.11.0
 
-# LangChain and embeddings
-langchain==0.0.1
+# LangChain and embeddings (remote)
 langchain-community>=0.0.24
-huggingface-hub==0.20.3
+langchain>=0.1.17
+huggingface-hub>=0.20.3
