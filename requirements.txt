@@ -12,7 +12,8 @@ numpy==1.26.4
 faiss-cpu==1.7.4
 
 # Pin google-genai to a version that uses pydantic v1.x
-google-genai==0.11.0
+google-genai==0.8.0
+
 
 langchain==0.0.1
 langchain-community>=0.0.24
