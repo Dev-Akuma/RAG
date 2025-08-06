@@ -13,7 +13,7 @@ from app.context_chunker import chunk_by_sentences
 from app.faiss_index import FaissIndex
 
 # Import your custom RemoteEmbedder (make sure it's in app/embeddings.py or adjust import path)
-from app.embeddings import RemoteEmbedder
+from app.embedding import RemoteEmbedder
 
 load_dotenv()
 
