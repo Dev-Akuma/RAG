@@ -17,5 +17,5 @@ google-genai
 
 
 langchain
-langchain-community
+langchain-huggingface
 huggingface-hub
