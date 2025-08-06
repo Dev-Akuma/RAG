@@ -15,7 +15,4 @@ pydantic>=2.7.0,<3.0.0
 # Pin google-genai to a version that uses pydantic v1.x
 google-genai
 
-
-langchain
-langchain-huggingface
 huggingface-hub

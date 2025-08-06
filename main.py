@@ -12,8 +12,8 @@ from app.document_parser import extract_text_from_upload
 from app.context_chunker import chunk_by_sentences
 from app.faiss_index import FaissIndex
 
-# UPDATED import - new official langchain-huggingface package
-from langchain_huggingface import HuggingFaceEmbeddings
+# Import your custom RemoteEmbedder (make sure it's in app/embeddings.py or adjust import path)
+from app.embeddings import RemoteEmbedder
 
 load_dotenv()
 
@@ -42,10 +42,10 @@ async def startup_event():
     print("🚀 Initializing Gemini client...")
     genai_client = genai.Client(api_key=GOOGLE_API_KEY)
 
-    print("🌐 Initializing remote Hugging Face embedder via LangChain HuggingFaceEmbeddings...")
-    embedder = await asyncio.to_thread(
-        HuggingFaceEmbeddings,
-        model_name="sentence-transformers/all-MiniLM-L6-v2",  # You can change to any HF model supported here
+    print("🌐 Initializing remote Hugging Face embedder via RemoteEmbedder (Inference API)...")
+    # No asyncio.to_thread needed, just instantiate
+    embedder = RemoteEmbedder(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
     
     print("📡 Initializing FAISS Index...")
@@ -80,7 +80,7 @@ async def upload_document(file: UploadFile = File(...)):
         if not chunks:
             raise HTTPException(status_code=400, detail="No text found to chunk.")
 
-        embeddings = embedder.embed_documents(chunks)
+        embeddings = embedder.embed_chunks(chunks)  # Use your embed_chunks method here
         vector_index.add(embeddings, chunks)
 
         return {
@@ -101,7 +101,7 @@ async def query_document(query: str):
         if not query.strip():
             raise HTTPException(status_code=400, detail="Query string is empty.")
 
-        query_embedding = embedder.embed_query(query)
+        query_embedding = embedder.embed_chunks([query])[0]  # embed_query alternative
         top_matches = vector_index.query(query_embedding, top_k=5)
 
         context = "No relevant context found." if not top_matches else "\n\n".join([match["text"] for match in top_matches])
