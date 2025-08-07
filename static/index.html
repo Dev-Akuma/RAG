@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Document Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel = "stylesheet" href = "style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
   <style>
     body {
@@ -62,115 +63,127 @@
   </div>
 
   <script>
-    const API_BASE = "https://rag-production-1694.up.railway.app"; // Change as needed
+  const API_BASE = "https://rag-production-1694.up.railway.app";
 
-    const dropZone = document.getElementById("dropZone");
-    const fileInput = document.getElementById("fileInput");
-    const uploadStatus = document.getElementById("uploadStatus");
-    const querySection = document.getElementById("querySection");
-    const responseBox = document.getElementById("responseBox");
-    const progressContainer = document.getElementById("progressContainer");
-    const progressBar = document.getElementById("progressBar");
-    const progressText = document.getElementById("progressText");
+  const dropZone = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+  const uploadStatus = document.getElementById("uploadStatus");
+  const querySection = document.getElementById("querySection");
+  const responseBox = document.getElementById("responseBox");
+  const progressContainer = document.getElementById("progressContainer");
+  const progressBar = document.getElementById("progressBar");
+  const progressText = document.getElementById("progressText");
 
-    dropZone.addEventListener("click", () => fileInput.click());
+  dropZone.addEventListener("click", () => fileInput.click());
 
-    dropZone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      dropZone.classList.add("dragover");
-    });
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
+  });
 
-    dropZone.addEventListener("dragleave", () => {
-      dropZone.classList.remove("dragover");
-    });
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("dragover");
+  });
 
-    dropZone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      dropZone.classList.remove("dragover");
-      const file = e.dataTransfer.files[0];
-      if (file) handleFileUpload(file);
-    });
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  });
 
-    fileInput.addEventListener("change", () => {
-      const file = fileInput.files[0];
-      if (file) handleFileUpload(file);
-    });
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) handleFileUpload(file);
+  });
 
-    function updateProgress(step, message) {
-      const percent = step * 25;
-      progressBar.style.width = percent + "%";
-      progressText.textContent = message;
+  function updateProgress(percent, message) {
+    progressBar.style.width = percent + "%";
+    progressText.textContent = message;
+  }
+
+  async function simulateProgressStages(batchCount = 4) {
+    updateProgress(20, "🔍 Extracting and cleaning text...");
+    await new Promise(r => setTimeout(r, 800));
+
+    updateProgress(40, "✂️ Chunking document...");
+    await new Promise(r => setTimeout(r, 1000));
+
+    for (let i = 1; i <= batchCount; i++) {
+      updateProgress(40 + i * (40 / batchCount), `📦 Embedding batch ${i} of ${batchCount}...`);
+      await new Promise(r => setTimeout(r, 700));
     }
 
-    async function handleFileUpload(file) {
-      uploadStatus.textContent = "";
-      querySection.style.display = "none";
-      responseBox.classList.add("hidden");
-      progressContainer.style.display = "block";
+    updateProgress(95, "🧠 Indexing embeddings...");
+    await new Promise(r => setTimeout(r, 600));
+  }
 
-      updateProgress(1, "📤 Uploading document...");
+  async function handleFileUpload(file) {
+    uploadStatus.textContent = "";
+    querySection.style.display = "none";
+    responseBox.classList.add("hidden");
+    progressContainer.style.display = "block";
 
-      const formData = new FormData();
-      formData.append("file", file);
+    updateProgress(5, "📤 Uploading document...");
 
-      try {
-        const res = await fetch(`${API_BASE}/upload_document`, {
-          method: "POST",
-          body: formData,
-        });
+    const formData = new FormData();
+    formData.append("file", file);
 
-        updateProgress(2, "🔍 Extracting & chunking text...");
-        // We don't have separate responses for each stage (text/chunk/embed) but simulate it for UX
+    try {
+      const res = await fetch(`${API_BASE}/upload_document`, {
+        method: "POST",
+        body: formData,
+      });
 
-        await new Promise((resolve) => setTimeout(resolve, 1200)); // fake wait
-        updateProgress(3, "💡 Generating embeddings & indexing...");
+      // Simulate realistic progress bar behavior
+      await simulateProgressStages(4);
 
-        const result = await res.json();
+      const result = await res.json();
 
-        if (res.ok) {
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // fake wait for indexing
-          updateProgress(4, "✅ Done! Document ready for queries.");
-          uploadStatus.textContent = `✅ Uploaded & processed ${result.chunks_count} chunks.`;
-          querySection.style.display = "block";
-        } else {
-          progressBar.style.width = "0%";
-          progressText.textContent = "❌ Error during upload.";
-          uploadStatus.textContent = `❌ Error: ${result.detail}`;
-        }
-      } catch (err) {
+      if (res.ok) {
+        updateProgress(100, "✅ Done! Document is ready.");
+        uploadStatus.textContent = `✅ Uploaded & processed ${result.chunks_count} chunks.`;
+        querySection.style.display = "block";
+      } else {
         progressBar.style.width = "0%";
-        progressText.textContent = "❌ Network error.";
-        uploadStatus.textContent = "❌ Network error during upload.";
-        console.error(err);
+        progressText.textContent = "❌ Error during processing.";
+        uploadStatus.textContent = `❌ Error: ${result.detail}`;
       }
+    } catch (err) {
+      progressBar.style.width = "0%";
+      progressText.textContent = "❌ Network error.";
+      uploadStatus.textContent = "❌ Network error during upload.";
+      console.error(err);
     }
+  }
 
-    async function submitQuery() {
-      const query = document.getElementById("queryInput").value.trim();
-      if (!query) return;
+  async function submitQuery() {
+    const query = document.getElementById("queryInput").value.trim();
+    if (!query) return;
 
-      responseBox.classList.remove("hidden");
-      responseBox.innerHTML = "🔄 Thinking...";
+    responseBox.classList.remove("hidden");
+    responseBox.innerHTML = "🔄 Thinking...";
 
-      try {
-        const res = await fetch(`${API_BASE}/query`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
-        });
+    try {
+      const res = await fetch(`${API_BASE}/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
 
-        const result = await res.json();
+      const result = await res.json();
 
-        if (res.ok) {
-          responseBox.innerHTML = `<strong>💬 Response:</strong><br>${result.response}`;
-        } else {
-          responseBox.innerHTML = `❌ Error: ${result.detail}`;
-        }
-      } catch (err) {
-        responseBox.innerHTML = "❌ Network error while querying.";
-        console.error(err);
+      if (res.ok) {
+        responseBox.innerHTML = `<strong>💬 Response:</strong><br>${result.response}`;
+      } else {
+        responseBox.innerHTML = `❌ Error: ${result.detail}`;
       }
+    } catch (err) {
+      responseBox.innerHTML = "❌ Network error while querying.";
+      console.error(err);
     }
-  </script>
+  }
+</script>
+
 </body>
 </html>
