@@ -4,11 +4,13 @@ from docx import Document
 import email
 from email import policy
 import extract_msg
+import tempfile
 
 SUPPORTED_FORMATS = [".pdf", ".docx", ".eml", ".msg"]
 
 def extract_text_from_pdf_file(file_stream) -> str:
     try:
+        file_stream.seek(0)
         doc = fitz.open(stream=file_stream.read(), filetype="pdf")
         text = []
         for page in doc:
@@ -21,7 +23,6 @@ def extract_text_from_pdf_file(file_stream) -> str:
 
 def extract_text_from_docx_file(file_stream) -> str:
     try:
-        # Need to reset stream position for python-docx
         file_stream.seek(0)
         doc = Document(file_stream)
         paragraphs = [para.text.strip() for para in doc.paragraphs if para.text.strip()]
@@ -47,13 +48,15 @@ def extract_text_from_eml_file(file_stream) -> str:
 
 def extract_text_from_msg_file(file_stream) -> str:
     try:
-        # extract_msg requires a file path, so we'll save temporarily
-        import tempfile
+        file_stream.seek(0)
+        # extract_msg requires a file path, so save to temp file
         with tempfile.NamedTemporaryFile(delete=True) as tmp:
             tmp.write(file_stream.read())
             tmp.flush()
             msg = extract_msg.Message(tmp.name)
-            return f"Subject: {msg.subject}\n\n{msg.body.strip()}"
+            subject = msg.subject or ""
+            body = msg.body or ""
+            return f"Subject: {subject}\n\n{body.strip()}"
     except Exception as e:
         raise RuntimeError(f"Failed to parse MSG: {e}")
 

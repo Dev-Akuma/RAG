@@ -4,10 +4,10 @@ import uuid
 from typing import List, Dict, Union
 
 class FaissIndex:
-    def __init__(self, embedding_dim: int = 384):
+    def __init__(self, embedding_dim: int = None):
         print("📚 Initializing FAISS index...")
         self.embedding_dim = embedding_dim
-        self.index = faiss.IndexFlatIP(embedding_dim)  # Cosine similarity via normalized vectors
+        self.index = None  # Will initialize on first `.add()` call
         self.text_chunks: List[str] = []
         self.ids: List[str] = []
 
@@ -21,7 +21,15 @@ class FaissIndex:
         if not isinstance(embeddings, np.ndarray):
             embeddings = np.array(embeddings, dtype='float32')
 
-        # Normalize embeddings for cosine similarity
+        # Initialize FAISS index with dynamic dimension
+        if self.index is None:
+            self.embedding_dim = embeddings.shape[1]
+            self.index = faiss.IndexFlatIP(self.embedding_dim)
+            print(f"🆕 Initialized FAISS index with dim: {self.embedding_dim}")
+
+        elif embeddings.shape[1] != self.embedding_dim:
+            raise ValueError(f"Embedding dimension mismatch: expected {self.embedding_dim}, got {embeddings.shape[1]}")
+
         faiss.normalize_L2(embeddings)
 
         self.index.add(embeddings)
@@ -29,14 +37,12 @@ class FaissIndex:
         self.ids.extend([str(uuid.uuid4()) for _ in chunks])
 
     def query(self, query_vector: Union[np.ndarray, List[float]], top_k: int = 5) -> List[Dict]:
-        if self.index.ntotal == 0:
+        if self.index is None or self.index.ntotal == 0:
             return []
 
-        # Convert to np.ndarray if needed
         if not isinstance(query_vector, np.ndarray):
             query_vector = np.array(query_vector, dtype='float32')
 
-        # Normalize query vector
         query_vector = np.expand_dims(query_vector, axis=0)
         faiss.normalize_L2(query_vector)
 
