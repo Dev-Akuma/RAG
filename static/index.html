@@ -11,178 +11,172 @@
       font-family: 'Inter', sans-serif;
     }
     .dragover {
-      background-color: #e0f2fe !important;
+      background-color: #e0f7fa !important;
     }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center px-4 py-6">
+<body class="bg-gradient-to-tr from-blue-50 to-blue-100 text-gray-800 min-h-screen flex items-center justify-center px-4 py-8">
 
-  <h1 class="text-3xl font-semibold text-center mb-8">📄 Smart Document Assistant</h1>
-
-  <div
-    id="dropZone"
-    class="w-full max-w-2xl border-2 border-dashed border-gray-300 bg-white p-6 text-center rounded-lg cursor-pointer hover:border-blue-400 transition-all duration-200"
-  >
-    <p class="text-gray-500">
-      Drag & drop a document here, or <span class="text-blue-500 underline">click to select</span>.
-    </p>
-    <input type="file" id="fileInput" accept=".pdf,.docx,.eml,.msg" class="hidden" />
-  </div>
-
-  <!-- Progress bar -->
-  <div id="progressContainer" class="w-full max-w-2xl mt-6 hidden">
-    <div class="w-full bg-gray-200 rounded-full h-3">
-      <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%;"></div>
-    </div>
-    <p id="progressText" class="text-sm mt-2 text-center text-gray-600">Waiting to start...</p>
-  </div>
-
-  <div id="uploadStatus" class="mt-4 text-center text-sm text-gray-600"></div>
-
-  <div id="querySection" class="w-full max-w-2xl mt-10 hidden">
-    <textarea
-      id="queryInput"
-      class="w-full p-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400 focus:outline-none mb-4 text-sm resize-none"
-      rows="4"
-      placeholder="Ask a question about the uploaded document..."
-    ></textarea>
-    <div class="flex justify-end">
-      <button
-        onclick="submitQuery()"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow-md transition-all duration-150"
-      >
-        🔍 Ask
-      </button>
+  <div class="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-8 space-y-8 border border-gray-200">
+    <div class="text-center">
+      <h1 class="text-4xl font-bold text-blue-700">📄 Smart Document Assistant</h1>
+      <p class="text-gray-500 mt-2">Upload a document and ask anything about it.</p>
     </div>
 
-    <div
-      id="responseBox"
-      class="hidden mt-6 p-5 bg-white border-l-4 border-blue-500 shadow text-sm leading-relaxed rounded-md whitespace-pre-line"
-    ></div>
+    <!-- Upload Section -->
+    <div id="dropZone"
+      class="border-2 border-dashed border-blue-300 bg-blue-50 hover:bg-blue-100 p-6 rounded-xl text-center cursor-pointer transition-all duration-200">
+      <p class="text-gray-600">
+        Drag & drop a document here, or <span class="text-blue-600 font-semibold underline">click to select</span>.
+      </p>
+      <input type="file" id="fileInput" accept=".pdf,.docx,.eml,.msg" class="hidden" />
+    </div>
+
+    <!-- Progress bar -->
+    <div id="progressContainer" class="hidden space-y-2">
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%;"></div>
+      </div>
+      <p id="progressText" class="text-sm text-center text-gray-600">Waiting to start...</p>
+    </div>
+
+    <!-- Upload Status -->
+    <div id="uploadStatus" class="text-center text-sm text-gray-600"></div>
+
+    <!-- Query Section -->
+    <div id="querySection" class="hidden space-y-4">
+      <textarea
+        id="queryInput"
+        class="w-full p-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm resize-none"
+        rows="4"
+        placeholder="Ask a question about the uploaded document..."></textarea>
+
+      <div class="flex justify-end">
+        <button onclick="submitQuery()"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-md text-sm transition-all duration-200">
+          🔍 Ask
+        </button>
+      </div>
+
+      <div id="responseBox"
+        class="hidden mt-4 p-5 bg-gray-50 border-l-4 border-blue-600 text-gray-800 shadow-inner rounded-md text-sm whitespace-pre-line leading-relaxed">
+      </div>
+    </div>
   </div>
 
   <script>
-  const API_BASE = "https://rag-00n8.onrender.com";
+    const API_BASE = "https://rag-00n8.onrender.com";
 
-  const dropZone = document.getElementById("dropZone");
-  const fileInput = document.getElementById("fileInput");
-  const uploadStatus = document.getElementById("uploadStatus");
-  const querySection = document.getElementById("querySection");
-  const responseBox = document.getElementById("responseBox");
-  const progressContainer = document.getElementById("progressContainer");
-  const progressBar = document.getElementById("progressBar");
-  const progressText = document.getElementById("progressText");
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const querySection = document.getElementById("querySection");
+    const responseBox = document.getElementById("responseBox");
+    const progressContainer = document.getElementById("progressContainer");
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
 
-  dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) handleFileUpload(file);
+    });
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (file) handleFileUpload(file);
+    });
 
-  dropZone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropZone.classList.add("dragover");
-  });
-
-  dropZone.addEventListener("dragleave", () => {
-    dropZone.classList.remove("dragover");
-  });
-
-  dropZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("dragover");
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileUpload(file);
-  });
-
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files[0];
-    if (file) handleFileUpload(file);
-  });
-
-  function updateProgress(percent, message) {
-    progressBar.style.width = percent + "%";
-    progressText.textContent = message;
-  }
-
-  async function simulateProgressStages(batchCount = 4) {
-    updateProgress(20, "🔍 Extracting and cleaning text...");
-    await new Promise(r => setTimeout(r, 800));
-
-    updateProgress(40, "✂️ Chunking document...");
-    await new Promise(r => setTimeout(r, 1000));
-
-    for (let i = 1; i <= batchCount; i++) {
-      updateProgress(40 + i * (40 / batchCount), `📦 Embedding batch ${i} of ${batchCount}...`);
-      await new Promise(r => setTimeout(r, 700));
+    function updateProgress(percent, message) {
+      progressBar.style.width = percent + "%";
+      progressText.textContent = message;
     }
 
-    updateProgress(95, "🧠 Indexing embeddings...");
-    await new Promise(r => setTimeout(r, 600));
-  }
+    async function simulateProgressStages(batchCount = 4) {
+      updateProgress(20, "🔍 Extracting and cleaning text...");
+      await new Promise(r => setTimeout(r, 800));
+      updateProgress(40, "✂️ Chunking document...");
+      await new Promise(r => setTimeout(r, 1000));
+      for (let i = 1; i <= batchCount; i++) {
+        updateProgress(40 + i * (40 / batchCount), `📦 Embedding batch ${i} of ${batchCount}...`);
+        await new Promise(r => setTimeout(r, 700));
+      }
+      updateProgress(95, "🧠 Indexing embeddings...");
+      await new Promise(r => setTimeout(r, 600));
+    }
 
-  async function handleFileUpload(file) {
-    uploadStatus.textContent = "";
-    querySection.style.display = "none";
-    responseBox.classList.add("hidden");
-    progressContainer.style.display = "block";
+    async function handleFileUpload(file) {
+      uploadStatus.textContent = "";
+      querySection.style.display = "none";
+      responseBox.classList.add("hidden");
+      progressContainer.style.display = "block";
 
-    updateProgress(5, "📤 Uploading document...");
+      updateProgress(5, "📤 Uploading document...");
 
-    const formData = new FormData();
-    formData.append("file", file);
+      const formData = new FormData();
+      formData.append("file", file);
 
-    try {
-      const res = await fetch(`${API_BASE}/upload_document`, {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const res = await fetch(`${API_BASE}/upload_document`, {
+          method: "POST",
+          body: formData,
+        });
 
-      // Simulate realistic progress bar behavior
-      await simulateProgressStages(4);
+        await simulateProgressStages(4);
 
-      const result = await res.json();
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text);
+        }
 
-      if (res.ok) {
+        const result = await res.json();
+
         updateProgress(100, "✅ Done! Document is ready.");
         uploadStatus.textContent = `✅ Uploaded & processed ${result.chunks_count} chunks.`;
         querySection.style.display = "block";
-      } else {
+
+      } catch (err) {
         progressBar.style.width = "0%";
         progressText.textContent = "❌ Error during processing.";
-        uploadStatus.textContent = `❌ Error: ${result.detail}`;
+        uploadStatus.textContent = `❌ Upload failed: ${err.message}`;
+        console.error(err);
       }
-    } catch (err) {
-      progressBar.style.width = "0%";
-      progressText.textContent = "❌ Network error.";
-      uploadStatus.textContent = "❌ Network error during upload.";
-      console.error(err);
     }
-  }
 
-  async function submitQuery() {
-    const query = document.getElementById("queryInput").value.trim();
-    if (!query) return;
+    async function submitQuery() {
+      const query = document.getElementById("queryInput").value.trim();
+      if (!query) return;
 
-    responseBox.classList.remove("hidden");
-    responseBox.innerHTML = "🔄 Thinking...";
+      responseBox.classList.remove("hidden");
+      responseBox.innerHTML = "🔄 Thinking...";
 
-    try {
-      const res = await fetch(`${API_BASE}/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
+      try {
+        const res = await fetch(`${API_BASE}/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
 
-      const result = await res.json();
+        const result = await res.json();
 
-      if (res.ok) {
-        responseBox.innerHTML = `<strong>💬 Response:</strong><br>${result.response}`;
-      } else {
-        responseBox.innerHTML = `❌ Error: ${result.detail}`;
+        if (res.ok) {
+          responseBox.innerHTML = `<strong class="text-blue-700">💬 Response:</strong><br>${result.response}`;
+        } else {
+          responseBox.innerHTML = `❌ Error: ${result.detail}`;
+        }
+      } catch (err) {
+        responseBox.innerHTML = "❌ Network error while querying.";
+        console.error(err);
       }
-    } catch (err) {
-      responseBox.innerHTML = "❌ Network error while querying.";
-      console.error(err);
     }
-  }
-</script>
-
+  </script>
 </body>
 </html>
