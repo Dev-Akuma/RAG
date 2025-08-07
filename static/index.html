@@ -29,6 +29,14 @@
     <input type="file" id="fileInput" accept=".pdf,.docx,.eml,.msg" class="hidden" />
   </div>
 
+  <!-- Progress bar -->
+  <div id="progressContainer" class="w-full max-w-2xl mt-6 hidden">
+    <div class="w-full bg-gray-200 rounded-full h-3">
+      <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%;"></div>
+    </div>
+    <p id="progressText" class="text-sm mt-2 text-center text-gray-600">Waiting to start...</p>
+  </div>
+
   <div id="uploadStatus" class="mt-4 text-center text-sm text-gray-600"></div>
 
   <div id="querySection" class="w-full max-w-2xl mt-10 hidden">
@@ -54,13 +62,16 @@
   </div>
 
   <script>
-    const API_BASE = "https://rag-production-1694.up.railway.app"; // Set this to your deployed API base URL if needed, e.g. "https://your-railway-url.up.railway.app"
+    const API_BASE = "https://rag-production-1694.up.railway.app"; // Change as needed
 
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
     const uploadStatus = document.getElementById("uploadStatus");
     const querySection = document.getElementById("querySection");
     const responseBox = document.getElementById("responseBox");
+    const progressContainer = document.getElementById("progressContainer");
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
 
     dropZone.addEventListener("click", () => fileInput.click());
 
@@ -85,10 +96,19 @@
       if (file) handleFileUpload(file);
     });
 
+    function updateProgress(step, message) {
+      const percent = step * 25;
+      progressBar.style.width = percent + "%";
+      progressText.textContent = message;
+    }
+
     async function handleFileUpload(file) {
-      uploadStatus.textContent = "📤 Uploading & processing...";
-      responseBox.classList.add("hidden");
+      uploadStatus.textContent = "";
       querySection.style.display = "none";
+      responseBox.classList.add("hidden");
+      progressContainer.style.display = "block";
+
+      updateProgress(1, "📤 Uploading document...");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -99,15 +119,27 @@
           body: formData,
         });
 
+        updateProgress(2, "🔍 Extracting & chunking text...");
+        // We don't have separate responses for each stage (text/chunk/embed) but simulate it for UX
+
+        await new Promise((resolve) => setTimeout(resolve, 1200)); // fake wait
+        updateProgress(3, "💡 Generating embeddings & indexing...");
+
         const result = await res.json();
 
         if (res.ok) {
-          uploadStatus.textContent = `✅ Uploaded & processed ${result.chunks_count} chunks. Ready for queries.`;
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // fake wait for indexing
+          updateProgress(4, "✅ Done! Document ready for queries.");
+          uploadStatus.textContent = `✅ Uploaded & processed ${result.chunks_count} chunks.`;
           querySection.style.display = "block";
         } else {
+          progressBar.style.width = "0%";
+          progressText.textContent = "❌ Error during upload.";
           uploadStatus.textContent = `❌ Error: ${result.detail}`;
         }
       } catch (err) {
+        progressBar.style.width = "0%";
+        progressText.textContent = "❌ Network error.";
         uploadStatus.textContent = "❌ Network error during upload.";
         console.error(err);
       }

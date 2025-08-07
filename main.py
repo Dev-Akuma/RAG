@@ -79,15 +79,6 @@ async def call_gemini_api(prompt: str) -> str:
         print(f"❌ Error calling Gemini API: {e}")
         return "Sorry, I couldn't generate a response at this time."
 
-# Batch embedder to avoid memory spikes
-async def embed_in_batches(chunks, batch_size=64):
-    all_embeddings = []
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i:i + batch_size]
-        emb = embedder.embed_chunks(batch)
-        all_embeddings.append(emb)
-    return np.vstack(all_embeddings)
-
 @app.post("/upload_document")
 async def upload_document(file: UploadFile = File(...)):
     if not embedder or not vector_index:
@@ -107,7 +98,17 @@ async def upload_document(file: UploadFile = File(...)):
         if not chunks:
             raise HTTPException(status_code=400, detail="No text found to chunk.")
 
-        embeddings = await embed_in_batches(chunks, batch_size=64)
+        # Embed chunks in batches asynchronously
+        all_embeddings = []
+        batch_size = 64
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i+batch_size]
+            batch_embeds = await embedder.embed_chunks(batch)
+            all_embeddings.append(batch_embeds)
+            # Optional: slight delay to avoid quota issues
+            # await asyncio.sleep(1)
+
+        embeddings = np.vstack(all_embeddings)
         print(f"🔢 Generated embeddings of shape: {embeddings.shape}")
 
         vector_index.add(embeddings, chunks)
@@ -131,13 +132,14 @@ class QueryRequest(BaseModel):
 async def query_document(request: QueryRequest):
     if not embedder or not vector_index:
         raise HTTPException(status_code=503, detail="Service not ready.")
-    
+
     try:
         query = request.query.strip()
         if not query:
             raise HTTPException(status_code=400, detail="Query string is empty.")
 
-        query_embedding = embedder.embed_chunks([query])[0]
+        # Await embedding for query since embed_chunks is async now
+        query_embedding = (await embedder.embed_chunks([query]))[0]
         top_matches = vector_index.query(query_embedding, top_k=5)
 
         context = "No relevant context found." if not top_matches else "\n\n".join(
