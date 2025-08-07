@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Document Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .dragover {
+      background-color: #e0f2fe !important;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center px-4 py-6">
+
+  <h1 class="text-3xl font-semibold text-center mb-8">📄 Smart Document Assistant</h1>
+
+  <div
+    id="dropZone"
+    class="w-full max-w-2xl border-2 border-dashed border-gray-300 bg-white p-6 text-center rounded-lg cursor-pointer hover:border-blue-400 transition-all duration-200"
+  >
+    <p class="text-gray-500">
+      Drag & drop a document here, or <span class="text-blue-500 underline">click to select</span>.
+    </p>
+    <input type="file" id="fileInput" accept=".pdf,.docx,.eml,.msg" class="hidden" />
+  </div>
+
+  <div id="uploadStatus" class="mt-4 text-center text-sm text-gray-600"></div>
+
+  <div id="querySection" class="w-full max-w-2xl mt-10 hidden">
+    <textarea
+      id="queryInput"
+      class="w-full p-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400 focus:outline-none mb-4 text-sm resize-none"
+      rows="4"
+      placeholder="Ask a question about the uploaded document..."
+    ></textarea>
+    <div class="flex justify-end">
+      <button
+        onclick="submitQuery()"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow-md transition-all duration-150"
+      >
+        🔍 Ask
+      </button>
+    </div>
+
+    <div
+      id="responseBox"
+      class="hidden mt-6 p-5 bg-white border-l-4 border-blue-500 shadow text-sm leading-relaxed rounded-md whitespace-pre-line"
+    ></div>
+  </div>
+
+  <script>
+    const API_BASE = "https://rag-production-1694.up.railway.app"; // Set this to your deployed API base URL if needed, e.g. "https://your-railway-url.up.railway.app"
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const querySection = document.getElementById("querySection");
+    const responseBox = document.getElementById("responseBox");
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) handleFileUpload(file);
+    });
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (file) handleFileUpload(file);
+    });
+
+    async function handleFileUpload(file) {
+      uploadStatus.textContent = "📤 Uploading & processing...";
+      responseBox.classList.add("hidden");
+      querySection.style.display = "none";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await fetch(`${API_BASE}/upload_document`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          uploadStatus.textContent = `✅ Uploaded & processed ${result.chunks_count} chunks. Ready for queries.`;
+          querySection.style.display = "block";
+        } else {
+          uploadStatus.textContent = `❌ Error: ${result.detail}`;
+        }
+      } catch (err) {
+        uploadStatus.textContent = "❌ Network error during upload.";
+        console.error(err);
+      }
+    }
+
+    async function submitQuery() {
+      const query = document.getElementById("queryInput").value.trim();
+      if (!query) return;
+
+      responseBox.classList.remove("hidden");
+      responseBox.innerHTML = "🔄 Thinking...";
+
+      try {
+        const res = await fetch(`${API_BASE}/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          responseBox.innerHTML = `<strong>💬 Response:</strong><br>${result.response}`;
+        } else {
+          responseBox.innerHTML = `❌ Error: ${result.detail}`;
+        }
+      } catch (err) {
+        responseBox.innerHTML = "❌ Network error while querying.";
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -6,6 +6,8 @@ from io import BytesIO
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -21,13 +23,20 @@ load_dotenv()
 
 app = FastAPI()
 
-# Enable CORS
+# Enable CORS for all origins (adjust if needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static frontend
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+async def root():
+    return FileResponse("static/index.html")
 
 # Globals
 embedder = None
@@ -104,7 +113,7 @@ async def upload_document(file: UploadFile = File(...)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ Failed to process document: {str(e) or 'Unknown error'}")
 
-# Define Pydantic model for the query endpoint
+# Pydantic model for /query
 class QueryRequest(BaseModel):
     query: str
 
