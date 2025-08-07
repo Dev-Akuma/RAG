@@ -8,11 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from google import genai
+
 from app.document_parser import extract_text_from_upload
 from app.context_chunker import chunk_by_sentences
 from app.faiss_index import FaissIndex
-
-# Import your custom RemoteEmbedder (make sure it's in app/embeddings.py or adjust import path)
 from app.embedding import RemoteEmbedder
 
 load_dotenv()
@@ -39,15 +38,16 @@ async def startup_event():
     if not GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY not set in env variables")
 
-    print("🚀 Initializing Gemini client...")
-    genai_client = genai.Client(api_key=GOOGLE_API_KEY)
+    print("🚀 Configuring Gemini API client...")
+    genai.configure(api_key=GOOGLE_API_KEY)
+    genai_client = genai.Client()
 
-    print("🌐 Initializing remote Hugging Face embedder via RemoteEmbedder (Inference API)...")
-    # No asyncio.to_thread needed, just instantiate
+    print("🌐 Initializing RemoteEmbedder with Gemini model...")
     embedder = RemoteEmbedder(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="models/embedding-001",
+        google_api_key=GOOGLE_API_KEY
     )
-    
+
     print("📡 Initializing FAISS Index...")
     vector_index = FaissIndex()
 
@@ -58,7 +58,7 @@ async def call_gemini_api(prompt: str) -> str:
         raise HTTPException(status_code=503, detail="Service not ready. Please try again in a moment.")
     try:
         response = genai_client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="models/gemini-1.5-flash",  # Updated to correct model name
             contents=prompt,
         )
         return response.text
@@ -80,7 +80,7 @@ async def upload_document(file: UploadFile = File(...)):
         if not chunks:
             raise HTTPException(status_code=400, detail="No text found to chunk.")
 
-        embeddings = embedder.embed_chunks(chunks)  # Use your embed_chunks method here
+        embeddings = embedder.embed_chunks(chunks)
         vector_index.add(embeddings, chunks)
 
         return {
@@ -101,15 +101,17 @@ async def query_document(query: str):
         if not query.strip():
             raise HTTPException(status_code=400, detail="Query string is empty.")
 
-        query_embedding = embedder.embed_chunks([query])[0]  # embed_query alternative
+        query_embedding = embedder.embed_chunks([query])[0]
         top_matches = vector_index.query(query_embedding, top_k=5)
 
         context = "No relevant context found." if not top_matches else "\n\n".join([match["text"] for match in top_matches])
 
         prompt = f"""
 You are an intelligent assistant. Use the following context to answer the user's query.
+
 Context:
 {context}
+
 User query:
 {query}
 """
