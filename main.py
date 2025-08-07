@@ -2,6 +2,7 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import traceback
+import numpy as np
 from io import BytesIO
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -23,7 +24,7 @@ load_dotenv()
 
 app = FastAPI()
 
-# Enable CORS for all origins (adjust if needed)
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,8 +61,8 @@ async def startup_event():
         google_api_key=GOOGLE_API_KEY
     )
 
-    print("📡 Initializing FAISS Index...")
-    vector_index = FaissIndex()
+    print("📡 Initializing FAISS Index with IVF...")
+    vector_index = FaissIndex(embedding_dim=3072, use_ivf=True, nlist=100)
 
     print("✅ All dependencies initialized successfully.")
 
@@ -77,6 +78,15 @@ async def call_gemini_api(prompt: str) -> str:
     except Exception as e:
         print(f"❌ Error calling Gemini API: {e}")
         return "Sorry, I couldn't generate a response at this time."
+
+# Batch embedder to avoid memory spikes
+async def embed_in_batches(chunks, batch_size=64):
+    all_embeddings = []
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        emb = embedder.embed_chunks(batch)
+        all_embeddings.append(emb)
+    return np.vstack(all_embeddings)
 
 @app.post("/upload_document")
 async def upload_document(file: UploadFile = File(...)):
@@ -97,7 +107,7 @@ async def upload_document(file: UploadFile = File(...)):
         if not chunks:
             raise HTTPException(status_code=400, detail="No text found to chunk.")
 
-        embeddings = embedder.embed_chunks(chunks)
+        embeddings = await embed_in_batches(chunks, batch_size=64)
         print(f"🔢 Generated embeddings of shape: {embeddings.shape}")
 
         vector_index.add(embeddings, chunks)
@@ -113,7 +123,7 @@ async def upload_document(file: UploadFile = File(...)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ Failed to process document: {str(e) or 'Unknown error'}")
 
-# Pydantic model for /query
+# Pydantic model for query
 class QueryRequest(BaseModel):
     query: str
 

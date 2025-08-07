@@ -4,12 +4,31 @@ import uuid
 from typing import List, Dict, Union
 
 class FaissIndex:
-    def __init__(self, embedding_dim: int = None):
+    def __init__(self, embedding_dim: int = None, use_ivf: bool = False, nlist: int = 100):
+        """
+        :param embedding_dim: dimension of embedding vectors
+        :param use_ivf: whether to use IVF index (recommended for large datasets)
+        :param nlist: number of clusters for IVF (affects recall/speed tradeoff)
+        """
         print("📚 Initializing FAISS index...")
         self.embedding_dim = embedding_dim
-        self.index = None  # Will initialize on first `.add()` call
+        self.use_ivf = use_ivf
+        self.default_nlist = nlist  # Keep original nlist default
+        self.index = None
         self.text_chunks: List[str] = []
         self.ids: List[str] = []
+        self.is_trained = False
+
+    def _init_index(self, embedding_count: int):
+        if self.use_ivf:
+            # Dynamically cap nlist to be ≤ number of vectors
+            nlist = min(self.default_nlist, embedding_count)
+            quantizer = faiss.IndexFlatIP(self.embedding_dim)
+            self.index = faiss.IndexIVFFlat(quantizer, self.embedding_dim, nlist, faiss.METRIC_INNER_PRODUCT)
+            print(f"🆕 Initialized IVF FAISS index with dim: {self.embedding_dim}, nlist: {nlist}")
+        else:
+            self.index = faiss.IndexFlatIP(self.embedding_dim)
+            print(f"🆕 Initialized Flat FAISS index with dim: {self.embedding_dim}")
 
     def add(self, embeddings: Union[np.ndarray, List[List[float]]], chunks: List[str]):
         if len(embeddings) != len(chunks):
@@ -17,20 +36,23 @@ class FaissIndex:
 
         print(f"📦 Adding {len(embeddings)} vectors to FAISS")
 
-        # Convert to np.ndarray if not already
         if not isinstance(embeddings, np.ndarray):
             embeddings = np.array(embeddings, dtype='float32')
 
-        # Initialize FAISS index with dynamic dimension
         if self.index is None:
             self.embedding_dim = embeddings.shape[1]
-            self.index = faiss.IndexFlatIP(self.embedding_dim)
-            print(f"🆕 Initialized FAISS index with dim: {self.embedding_dim}")
+            self._init_index(len(embeddings))  # 🧠 Pass vector count here
 
         elif embeddings.shape[1] != self.embedding_dim:
             raise ValueError(f"Embedding dimension mismatch: expected {self.embedding_dim}, got {embeddings.shape[1]}")
 
         faiss.normalize_L2(embeddings)
+
+        if self.use_ivf and not self.is_trained:
+            print(f"⚙️ Training IVF index on {len(embeddings)} vectors...")
+            self.index.train(embeddings)
+            self.is_trained = True
+            print("✅ IVF index trained successfully.")
 
         self.index.add(embeddings)
         self.text_chunks.extend(chunks)
